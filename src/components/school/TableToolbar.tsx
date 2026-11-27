@@ -194,7 +194,7 @@ export function TableToolbar({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 lg:flex-row lg:items-center lg:justify-between lg:py-0",
+        "flex flex-col gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 lg:flex-row lg:items-center lg:justify-between",
         className,
       )}
     >
@@ -208,14 +208,21 @@ export function TableToolbar({
               type="button"
               onClick={() => onTabChange?.(tab.key)}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-3 text-xs font-medium whitespace-nowrap transition-colors",
+                "flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
                 isActive
-                  ? "border-blue-600 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-800",
+                  ? "bg-gray-100 text-gray-900"
+                  : "bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800",
               )}
             >
               <span>{tab.label}</span>
-              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[11px] font-medium",
+                  isActive
+                    ? "border border-gray-200/80 bg-white text-gray-700"
+                    : "bg-gray-100 text-gray-500",
+                )}
+              >
                 {tab.count}
               </span>
             </button>
@@ -224,7 +231,7 @@ export function TableToolbar({
       </div>
 
       {/* Right: Search + Filters + Actions */}
-      <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:py-2">
+      <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
         {onSearchChange ? (
           <div className="relative w-full sm:w-80">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">

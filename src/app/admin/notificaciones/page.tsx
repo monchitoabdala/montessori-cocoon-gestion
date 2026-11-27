@@ -204,7 +204,7 @@ export default function AdminNotificacionesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-4 pt-2 pb-0 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
@@ -213,14 +213,20 @@ export default function AdminNotificacionesPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 transition-colors ${
                   isActive
-                    ? "border-brand-600 text-brand-600"
-                    : "border-transparent text-gray-500 hover:text-gray-800"
+                    ? "rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-900"
+                    : "rounded-lg bg-transparent px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800"
                 }`}
               >
                 <span>{tab.label}</span>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                <span
+                  className={
+                    isActive
+                      ? "rounded-full border border-gray-200/80 bg-white px-1.5 py-0.5 text-[11px] font-medium text-gray-700"
+                      : "rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-500"
+                  }
+                >
                   {tab.count}
                 </span>
               </button>
@@ -228,7 +234,7 @@ export default function AdminNotificacionesPage() {
           })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 pb-2 lg:pb-0">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={markAllAsRead}
