@@ -1,0 +1,455 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  TEACHER
+  GUARDIAN
+}
+
+enum StudentStatus {
+  ACTIVE
+  GRADUATED
+  INACTIVE
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum FeeType {
+  MONTHLY_FEE
+  ENROLLMENT
+  EXTRA
+}
+
+enum FeeStatus {
+  PENDING
+  PAID
+  OVERDUE
+  PARTIAL
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  MERCADOPAGO
+}
+
+enum PaymentStatus {
+  COMPLETED
+  PENDING
+  REJECTED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  PENDING
+}
+
+enum LeaveType {
+  VACATION
+  MEDICAL
+  PERSONAL
+  STUDY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayrollStatus {
+  PENDING
+  PAID
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(GUARDIAN)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacher             Teacher?
+  guardian            Guardian?
+  employee            Employee?
+  recordedPayments    Payment[]     @relation("RecordedPayments")
+  recordedAttendances Attendance[]  @relation("RecordedAttendances")
+  recordedGrades      GradeRecord[] @relation("RecordedGrades")
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  userId    String?  @unique
+  firstName String
+  lastName  String
+  dni       String   @unique
+  phone     String?
+  email     String?
+  specialty String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  employee  Employee?
+  divisions Division[]
+  subjects  Subject[]
+}
+
+model Employee {
+  id         String    @id @default(cuid())
+  userId     String?   @unique
+  teacherId  String?   @unique
+  firstName  String
+  lastName   String
+  dni        String    @unique
+  cuil       String?
+  email      String?
+  phone      String?
+  photoUrl   String?
+  roleTitle  String
+  department        String
+  baseSalary        Float?
+  vacationDaysLimit Int       @default(14)
+  hireDate          DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  teacher        Teacher?        @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  leaves         EmployeeLeave[]
+  payrollRecords PayrollRecord[]
+}
+
+model EmployeeLeave {
+  id         String      @id @default(cuid())
+  employeeId String
+  type       LeaveType
+  startDate  DateTime
+  endDate    DateTime
+  daysCount  Int
+  status     LeaveStatus @default(PENDING)
+  notes      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model PayrollRecord {
+  id          String        @id @default(cuid())
+  employeeId  String
+  period      String
+  grossAmount Float
+  deductions  Float         @default(0)
+  netAmount   Float
+  status      PayrollStatus @default(PENDING)
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, period])
+}
+
+model AcademicYear {
+  id                         String   @id @default(cuid())
+  year                       Int      @unique
+  name                       String
+  startDate                  DateTime
+  endDate                    DateTime
+  isActive                   Boolean  @default(false)
+  siblingDiscountPct         Decimal  @default(10) @db.Decimal(5, 2)
+  siblingDiscountMinChildren Int      @default(2)
+  lateFeePct                 Decimal  @default(10) @db.Decimal(5, 2)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  grades       Grade[]
+  scholarships Scholarship[]
+  feeCharges   FeeCharge[]
+}
+
+model Level {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  order  Int     @default(0)
+  grades Grade[]
+}
+
+model Grade {
+  id                  String   @id @default(cuid())
+  academicYearId      String
+  levelId             String
+  name                String
+  order               Int      @default(0)
+  monthlyFeeAmount    Decimal  @db.Decimal(12, 2)
+  enrollmentFeeAmount Decimal  @db.Decimal(12, 2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  level        Level        @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  divisions    Division[]
+  subjects     Subject[]
+
+  @@unique([academicYearId, levelId, name])
+}
+
+model Division {
+  id        String   @id @default(cuid())
+  gradeId   String
+  name      String
+  capacity  Int      @default(30)
+  teacherId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  grade    Grade     @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  teacher  Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  students Student[]
+  subjects Subject[]
+
+  @@unique([gradeId, name])
+}
+
+model Guardian {
+  id        String   @id @default(cuid())
+  userId    String?  @unique
+  firstName String
+  lastName  String
+  dni       String   @unique
+  email     String?
+  phone     String?
+  whatsapp  String?
+  address   String?
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  students      StudentGuardian[]
+  payments      Payment[]
+  notifications NotificationLog[]
+}
+
+model Student {
+  id               String        @id @default(cuid())
+  legajo           String        @unique
+  firstName        String
+  lastName         String
+  dni              String        @unique
+  birthDate        DateTime
+  status           StudentStatus @default(ACTIVE)
+  divisionId       String?
+  photoUrl         String?
+  address          String?
+  bloodType        String?
+  emergencyContact String?
+  emergencyPhone   String?
+  allergiesNotes   String?
+  observations     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  division      Division?         @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  guardians     StudentGuardian[]
+  scholarships  Scholarship[]
+  feeCharges    FeeCharge[]
+  attendances   Attendance[]
+  gradeRecords  GradeRecord[]
+  notifications NotificationLog[]
+}
+
+model StudentGuardian {
+  id                     String  @id @default(cuid())
+  studentId              String
+  guardianId             String
+  relationship           String
+  isFinancialResponsible Boolean @default(false)
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, guardianId])
+}
+
+model Scholarship {
+  id                String       @id @default(cuid())
+  studentId         String
+  academicYearId    String
+  name              String
+  type              DiscountType @default(PERCENTAGE)
+  value             Decimal      @db.Decimal(12, 2)
+  isSiblingDiscount Boolean      @default(false)
+  active            Boolean      @default(true)
+  notes             String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+}
+
+model FeeCharge {
+  id             String    @id @default(cuid())
+  studentId      String
+  academicYearId String
+  type           FeeType   @default(MONTHLY_FEE)
+  period         String
+  description    String
+  baseAmount     Decimal   @db.Decimal(12, 2)
+  discountAmount Decimal   @default(0) @db.Decimal(12, 2)
+  lateFeeAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  finalAmount    Decimal   @db.Decimal(12, 2)
+  paidAmount     Decimal   @default(0) @db.Decimal(12, 2)
+  dueDate        DateTime
+  status         FeeStatus @default(PENDING)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  student       Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear  AcademicYear        @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  allocations   PaymentAllocation[]
+  notifications NotificationLog[]
+
+  @@index([studentId, period])
+  @@index([status, dueDate])
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  guardianId       String?
+  amount           Decimal       @db.Decimal(12, 2)
+  method           PaymentMethod
+  status           PaymentStatus @default(COMPLETED)
+  mpPreferenceId   String?
+  mpPaymentId      String?       @unique
+  receiptNumber    String        @unique
+  paidAt           DateTime      @default(now())
+  notes            String?
+  recordedByUserId String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  guardian      Guardian?           @relation(fields: [guardianId], references: [id], onDelete: SetNull)
+  recordedBy    User?               @relation("RecordedPayments", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+  allocations   PaymentAllocation[]
+  notifications NotificationLog[]
+}
+
+model PaymentAllocation {
+  id          String  @id @default(cuid())
+  paymentId   String
+  feeChargeId String
+  amount      Decimal @db.Decimal(12, 2)
+
+  payment   Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  feeCharge FeeCharge @relation(fields: [feeChargeId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, feeChargeId])
+}
+
+model Attendance {
+  id               String           @id @default(cuid())
+  studentId        String
+  date             DateTime         @db.Date
+  status           AttendanceStatus
+  observations     String?
+  recordedByUserId String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recordedBy User?   @relation("RecordedAttendances", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, date])
+  @@index([date])
+}
+
+model Subject {
+  id         String   @id @default(cuid())
+  name       String
+  code       String?
+  gradeId    String
+  divisionId String?
+  teacherId  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  grade        Grade         @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  division     Division?     @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  teacher      Teacher?      @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  gradeRecords GradeRecord[]
+
+  @@unique([gradeId, divisionId, name])
+}
+
+model GradeRecord {
+  id               String   @id @default(cuid())
+  studentId        String
+  subjectId        String
+  term             String
+  score            Decimal  @db.Decimal(4, 2)
+  observations     String?
+  recordedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject    Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  recordedBy User?   @relation("RecordedGrades", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, subjectId, term])
+}
+
+model NotificationLog {
+  id           String              @id @default(cuid())
+  channel      NotificationChannel
+  recipient    String
+  subject      String?
+  message      String
+  status       NotificationStatus  @default(PENDING)
+  errorMessage String?
+  guardianId   String?
+  studentId    String?
+  feeChargeId  String?
+  paymentId    String?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+
+  guardian  Guardian?  @relation(fields: [guardianId], references: [id], onDelete: SetNull)
+  student   Student?   @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  feeCharge FeeCharge? @relation(fields: [feeChargeId], references: [id], onDelete: SetNull)
+  payment   Payment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+}

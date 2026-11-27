@@ -4,6 +4,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   /* config options here */
   webpack(config) {
     config.module.rules.push({
