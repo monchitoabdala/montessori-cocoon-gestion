@@ -5,7 +5,16 @@ import { cn } from "@/utils";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+interface NotificationSummaryItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: "OVERDUE" | "LEAVE" | "FEE";
+  href: string;
+  date?: string;
+}
 
 export interface AppShellUser {
   userId?: string;
@@ -128,6 +137,60 @@ function IconCalendarDays() {
       <path d="M8 18h.01" />
       <path d="M12 18h.01" />
       <path d="M16 18h.01" />
+    </svg>
+  );
+}
+
+function IconArrowLeft() {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 19-7-7 7-7" />
+      <path d="M19 12H5" />
+    </svg>
+  );
+}
+
+function IconBuilding() {
+  return (
+    <svg className="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
+      <path d="M9 22v-4h6v4" />
+      <path d="M8 6h.01" />
+      <path d="M16 6h.01" />
+      <path d="M12 6h.01" />
+      <path d="M12 10h.01" />
+      <path d="M12 14h.01" />
+      <path d="M16 10h.01" />
+      <path d="M16 14h.01" />
+      <path d="M8 10h.01" />
+      <path d="M8 14h.01" />
+    </svg>
+  );
+}
+
+function IconPlug() {
+  return (
+    <svg className="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22v-5" />
+      <path d="M9 8V2" />
+      <path d="M15 8V2" />
+      <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
+    </svg>
+  );
+}
+
+function IconShield() {
+  return (
+    <svg className="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    </svg>
+  );
+}
+
+function IconZap() {
+  return (
+    <svg className="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     </svg>
   );
 }
@@ -318,10 +381,46 @@ function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
       { label: "Vacaciones" },
     ];
   }
-  if (pathname.startsWith("/admin/configuracion")) {
+  if (pathname === "/admin/configuracion") {
     return [
       { label: "Administración", href: "/admin" },
-      { label: "Configuración" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Datos del Colegio" },
+    ];
+  }
+  if (pathname.startsWith("/admin/configuracion/aranceles")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Aranceles y Becas" },
+    ];
+  }
+  if (pathname.startsWith("/admin/configuracion/ciclo-lectivo")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Ciclo Lectivo y Mora" },
+    ];
+  }
+  if (pathname.startsWith("/admin/configuracion/integraciones")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Integraciones" },
+    ];
+  }
+  if (pathname.startsWith("/admin/configuracion/usuarios")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Usuarios y Roles" },
+    ];
+  }
+  if (pathname.startsWith("/admin/configuracion/automatizaciones")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Automatizaciones" },
     ];
   }
   if (pathname === "/docente") {
@@ -348,6 +447,20 @@ function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
 interface NavGroup {
   label?: string;
   items: NavItem[];
+}
+
+function getConfigNavGroup(): NavGroup {
+  return {
+    label: "Configuración del colegio",
+    items: [
+      { label: "Datos del Colegio", href: "/admin/configuracion", icon: <IconBuilding /> },
+      { label: "Aranceles y Becas", href: "/admin/configuracion/aranceles", icon: <IconWallet /> },
+      { label: "Ciclo Lectivo y Mora", href: "/admin/configuracion/ciclo-lectivo", icon: <IconCalendarDays /> },
+      { label: "Integraciones", href: "/admin/configuracion/integraciones", icon: <IconPlug /> },
+      { label: "Usuarios y Roles", href: "/admin/configuracion/usuarios", icon: <IconShield /> },
+      { label: "Automatizaciones", href: "/admin/configuracion/automatizaciones", icon: <IconZap /> },
+    ],
+  };
 }
 
 function getNavGroupsForRole(role: UserRole): NavGroup[] {
@@ -450,6 +563,46 @@ export function AppShell({ user, children }: AppShellProps) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifItems, setNotifItems] = useState<NotificationSummaryItem[]>([]);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/notifications?summary=true")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { unreadCount?: number; items?: NotificationSummaryItem[] } | null) => {
+        if (!cancelled && data) {
+          setUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+          setNotifItems(Array.isArray(data.items) ? data.items : []);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bellOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
+        setBellOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setBellOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [bellOpen]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -461,8 +614,13 @@ export function AppShell({ user, children }: AppShellProps) {
     }
   };
 
-  const navGroups = getNavGroupsForRole(user.role);
-  const firstHref = navGroups[0]?.items[0]?.href ?? "/";
+  const isConfigArea =
+    (user.role === "ADMIN" || user.role === "STAFF") &&
+    pathname.startsWith("/admin/configuracion");
+  const navGroups = isConfigArea
+    ? [getConfigNavGroup()]
+    : getNavGroupsForRole(user.role);
+  const firstHref = getNavGroupsForRole(user.role)[0]?.items[0]?.href ?? "/";
   const quickActions = getQuickActionsForRole(user.role);
   const roleMeta = getRoleMeta(user.role);
   const breadcrumbs = getBreadcrumbs(pathname);
@@ -474,7 +632,12 @@ export function AppShell({ user, children }: AppShellProps) {
         : "/admin/cuotas";
 
   const isActive = (href: string) => {
-    if (href === "/admin" || href === "/docente" || href === "/portal") {
+    if (
+      href === "/admin" ||
+      href === "/docente" ||
+      href === "/portal" ||
+      href === "/admin/configuracion"
+    ) {
       return pathname === href;
     }
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -505,9 +668,22 @@ export function AppShell({ user, children }: AppShellProps) {
 
         {/* Navigation */}
         <div className="px-3 py-5">
-          <p className="mb-2.5 px-3 text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">
-            Menú principal
-          </p>
+          {isConfigArea ? (
+            <div className="mb-2 border-b border-gray-100 pb-2">
+              <Link
+                href="/admin"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+              >
+                <IconArrowLeft />
+                <span>Volver al panel</span>
+              </Link>
+            </div>
+          ) : (
+            <p className="mb-2.5 px-3 text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              Menú principal
+            </p>
+          )}
           <nav className="space-y-1">
             {navGroups.map((group, groupIndex) => (
               <div key={group.label ?? `group-${groupIndex}`}>
@@ -660,26 +836,92 @@ export function AppShell({ user, children }: AppShellProps) {
                 ))}
               </div>
 
-              <div
-                className="hidden items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 md:flex"
-                title="Ciclo Lectivo 2026"
-              >
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <IconUsers className="h-3.5 w-3.5 text-gray-500" />
-                <span>2026</span>
-              </div>
+              <div ref={bellRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setBellOpen((prev) => !prev)}
+                  title="Notificaciones y vencimientos"
+                  aria-label="Notificaciones y vencimientos"
+                  aria-expanded={bellOpen}
+                  className="relative rounded-lg p-2 text-blue-600 transition-colors hover:bg-gray-100"
+                >
+                  <IconBell />
+                  {unreadCount > 0 ? (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  ) : null}
+                </button>
 
-              <Link
-                href={bellHref}
-                title="Notificaciones y vencimientos"
-                aria-label="Notificaciones y vencimientos"
-                className="relative rounded-lg p-2 text-blue-600 transition-colors hover:bg-gray-100"
-              >
-                <IconBell />
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-semibold text-white">
-                  2
-                </span>
-              </Link>
+                {bellOpen ? (
+                  <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-gray-200 bg-white shadow-lg">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+                      <span className="text-xs font-semibold text-gray-900">
+                        Notificaciones
+                      </span>
+                      {unreadCount > 0 ? (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                          {unreadCount} pendientes
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
+                      {notifItems.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-xs text-gray-500">
+                          Sin notificaciones pendientes
+                        </div>
+                      ) : (
+                        notifItems.map((item) => {
+                          const dotClass =
+                            item.category === "OVERDUE"
+                              ? "bg-red-500"
+                              : item.category === "LEAVE"
+                                ? "bg-amber-500"
+                                : "bg-blue-500";
+                          return (
+                            <Link
+                              key={item.id}
+                              href={item.href}
+                              onClick={() => setBellOpen(false)}
+                              className="flex items-start gap-2.5 px-4 py-2.5 transition-colors hover:bg-gray-50"
+                            >
+                              <span
+                                className={cn(
+                                  "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                                  dotClass,
+                                )}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-gray-900">
+                                  {item.title}
+                                </p>
+                                <p className="truncate text-[11px] text-gray-500">
+                                  {item.subtitle}
+                                </p>
+                              </div>
+                            </Link>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="border-t border-gray-100 px-4 py-2">
+                      <Link
+                        href={bellHref}
+                        onClick={() => setBellOpen(false)}
+                        className="block text-center text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        {user.role === "GUARDIAN"
+                          ? "Ver estado de cuenta"
+                          : user.role === "TEACHER"
+                            ? "Ir a asistencia"
+                            : "Ver cuotas y vencimientos"}
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-xs font-semibold text-gray-700"

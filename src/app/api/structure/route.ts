@@ -14,6 +14,23 @@ const createDivisionSchema = z.object({
   capacity: z.coerce.number().int().positive().optional().default(30),
 });
 
+const createGradeSchema = z.object({
+  action: z.literal("CREATE_GRADE"),
+  levelId: z.string().min(1, "El nivel es requerido"),
+  academicYearId: z.string().min(1).optional(),
+  name: z.string().trim().min(1, "El nombre del grado es requerido"),
+  order: z.coerce.number().int().nonnegative().optional(),
+  monthlyFeeAmount: z.coerce.number().nonnegative("El arancel mensual debe ser >= 0"),
+  enrollmentFeeAmount: z.coerce.number().nonnegative("La matrícula debe ser >= 0"),
+});
+
+const updateGradeSchema = z.object({
+  gradeId: z.string().min(1, "gradeId es requerido"),
+  name: z.string().trim().min(1).optional(),
+  monthlyFeeAmount: z.coerce.number().nonnegative().optional(),
+  enrollmentFeeAmount: z.coerce.number().nonnegative().optional(),
+});
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getSessionFromCookies();
@@ -143,6 +160,72 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => null);
+
+    if (body && typeof body === "object" && body.action === "CREATE_GRADE") {
+      const parsedGrade = createGradeSchema.safeParse(body);
+      if (!parsedGrade.success) {
+        return NextResponse.json(
+          { error: "Datos inválidos", details: parsedGrade.error.flatten() },
+          { status: 400 }
+        );
+      }
+
+      const gradeData = parsedGrade.data;
+      let academicYearId = gradeData.academicYearId;
+      if (!academicYearId) {
+        const activeYear = await prisma.academicYear.findFirst({
+          orderBy: [{ isActive: "desc" }, { year: "desc" }],
+        });
+        if (!activeYear) {
+          return NextResponse.json(
+            { error: "No hay ciclo lectivo configurado" },
+            { status: 400 }
+          );
+        }
+        academicYearId = activeYear.id;
+      }
+
+      const duplicate = await prisma.grade.findUnique({
+        where: {
+          academicYearId_levelId_name: {
+            academicYearId,
+            levelId: gradeData.levelId,
+            name: gradeData.name,
+          },
+        },
+      });
+      if (duplicate) {
+        return NextResponse.json(
+          { error: "Ya existe un grado con ese nombre en ese nivel" },
+          { status: 409 }
+        );
+      }
+
+      const maxOrder = await prisma.grade.aggregate({
+        where: { academicYearId, levelId: gradeData.levelId },
+        _max: { order: true },
+      });
+
+      const grade = await prisma.grade.create({
+        data: {
+          academicYearId,
+          levelId: gradeData.levelId,
+          name: gradeData.name,
+          order: gradeData.order ?? (maxOrder._max.order ?? 0) + 1,
+          monthlyFeeAmount: gradeData.monthlyFeeAmount,
+          enrollmentFeeAmount: gradeData.enrollmentFeeAmount,
+        },
+        include: {
+          level: { select: { id: true, name: true, order: true } },
+          academicYear: {
+            select: { id: true, year: true, name: true, isActive: true },
+          },
+        },
+      });
+
+      return NextResponse.json({ grade }, { status: 201 });
+    }
+
     const parsed = createDivisionSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -207,7 +290,60 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("POST /api/structure error:", error);
     return NextResponse.json(
-      { error: "Error al crear la división" },
+      { error: "Error al crear el registro académico" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getSessionFromCookies();
+    if (!session) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+    if (!isAdminOrStaff(session.role)) {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => null);
+    const parsed = updateGradeSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Datos inválidos", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { gradeId, name, monthlyFeeAmount, enrollmentFeeAmount } = parsed.data;
+    const existing = await prisma.grade.findUnique({ where: { id: gradeId } });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Grado / arancel no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    const grade = await prisma.grade.update({
+      where: { id: gradeId },
+      data: {
+        name,
+        monthlyFeeAmount,
+        enrollmentFeeAmount,
+      },
+      include: {
+        level: { select: { id: true, name: true, order: true } },
+        academicYear: {
+          select: { id: true, year: true, name: true, isActive: true },
+        },
+      },
+    });
+
+    return NextResponse.json({ grade });
+  } catch (error) {
+    console.error("PATCH /api/structure error:", error);
+    return NextResponse.json(
+      { error: "Error al actualizar el arancel" },
       { status: 500 }
     );
   }

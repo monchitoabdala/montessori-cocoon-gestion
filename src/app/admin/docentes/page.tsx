@@ -2,9 +2,10 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 interface TeacherItem {
   id: string;
@@ -50,7 +51,9 @@ export default function AdminDocentesPage() {
   const [teachers, setTeachers] = useState<TeacherItem[]>([]);
   const [divisions, setDivisions] = useState<DivisionOption[]>([]);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -109,6 +112,7 @@ export default function AdminDocentesPage() {
       );
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [search]);
 
@@ -174,25 +178,50 @@ export default function AdminDocentesPage() {
     }
   }
 
+  const teacherTabs = useMemo(
+    () => [
+      { key: "ALL", label: "Todos", count: teachers.length },
+      {
+        key: "ASSIGNED",
+        label: "Con cursos",
+        count: teachers.filter((t) => t.divisions.length > 0).length,
+      },
+      {
+        key: "UNASSIGNED",
+        label: "Sin asignar",
+        count: teachers.filter((t) => t.divisions.length === 0).length,
+      },
+    ],
+    [teachers],
+  );
+
+  const visibleTeachers = useMemo(() => {
+    if (activeTab === "ASSIGNED") {
+      return teachers.filter((t) => t.divisions.length > 0);
+    }
+    if (activeTab === "UNASSIGNED") {
+      return teachers.filter((t) => t.divisions.length === 0);
+    }
+    return teachers;
+  }, [activeTab, teachers]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar docente por nombre, DNI o especialidad..."
-          className="w-full max-w-md rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
-        />
-
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className="shrink-0 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Nuevo Docente
-        </button>
-      </div>
+      <TableToolbar
+        tabs={teacherTabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar docente por nombre, DNI o especialidad..."
+        actions={[
+          {
+            label: "Nuevo Docente",
+            primary: true,
+            onClick: () => setShowModal(true),
+          },
+        ]}
+      />
 
       {feedback ? (
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
@@ -227,7 +256,7 @@ export default function AdminDocentesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {loading ? (
+              {loading && !hasLoadedOnce ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -236,7 +265,7 @@ export default function AdminDocentesPage() {
                     Cargando docentes...
                   </td>
                 </tr>
-              ) : teachers.length === 0 ? (
+              ) : visibleTeachers.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -246,7 +275,7 @@ export default function AdminDocentesPage() {
                   </td>
                 </tr>
               ) : (
-                teachers.map((t) => (
+                visibleTeachers.map((t) => (
                   <tr
                     key={t.id}
                     onClick={() => router.push(`/admin/docentes/${t.id}`)}

@@ -2,9 +2,10 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 interface EmployeeItem {
   id: string;
@@ -45,7 +46,9 @@ export default function AdminEmpleadosPage() {
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
+  const [activeTab, setActiveTab] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -107,6 +110,7 @@ export default function AdminEmpleadosPage() {
       );
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [department, search]);
 
@@ -172,39 +176,66 @@ export default function AdminEmpleadosPage() {
     }, 900);
   }
 
+  const employeeTabs = useMemo(
+    () => [
+      { key: "ALL", label: "Todos", count: employees.length },
+      {
+        key: "ACTIVE",
+        label: "Activos",
+        count: employees.filter((e) => e.active).length,
+      },
+      {
+        key: "INACTIVE",
+        label: "Inactivos",
+        count: employees.filter((e) => !e.active).length,
+      },
+    ],
+    [employees],
+  );
+
+  const visibleEmployees = useMemo(() => {
+    if (activeTab === "ACTIVE") return employees.filter((e) => e.active);
+    if (activeTab === "INACTIVE") return employees.filter((e) => !e.active);
+    return employees;
+  }, [activeTab, employees]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, DNI o cargo..."
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
-          />
-          <select
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
-          >
-            <option value="">Todos los departamentos</option>
-            {DEPARTMENTS.map((dep) => (
-              <option key={dep} value={dep}>
-                {dep}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className="shrink-0 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Nuevo Empleado
-        </button>
-      </div>
+      <TableToolbar
+        tabs={employeeTabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar por nombre, DNI o cargo..."
+        activeFiltersCount={department ? 1 : 0}
+        filtersContent={
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-gray-500">
+              Departamento
+            </label>
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
+            >
+              <option value="">Todos los departamentos</option>
+              {DEPARTMENTS.map((dep) => (
+                <option key={dep} value={dep}>
+                  {dep}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+        actions={[
+          {
+            label: "Nuevo Empleado",
+            primary: true,
+            onClick: () => setShowModal(true),
+          },
+        ]}
+      />
 
       {feedback ? (
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
@@ -241,7 +272,7 @@ export default function AdminEmpleadosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {loading ? (
+              {loading && !hasLoadedOnce ? (
                 <tr>
                   <td
                     colSpan={8}
@@ -250,7 +281,7 @@ export default function AdminEmpleadosPage() {
                     Cargando personal...
                   </td>
                 </tr>
-              ) : employees.length === 0 ? (
+              ) : visibleEmployees.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
@@ -260,7 +291,7 @@ export default function AdminEmpleadosPage() {
                   </td>
                 </tr>
               ) : (
-                employees.map((emp) => (
+                visibleEmployees.map((emp) => (
                   <tr
                     key={emp.id}
                     onClick={() => router.push(`/admin/empleados/${emp.id}`)}

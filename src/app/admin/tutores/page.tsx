@@ -2,9 +2,10 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 interface LinkedStudent {
   relationship: string;
@@ -50,7 +51,9 @@ export default function AdminTutoresPage() {
   const [guardians, setGuardians] = useState<GuardianItem[]>([]);
   const [allStudents, setAllStudents] = useState<StudentOption[]>([]);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -113,6 +116,7 @@ export default function AdminTutoresPage() {
       setError(err instanceof Error ? err.message : "Error al listar tutores");
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [search]);
 
@@ -228,25 +232,50 @@ export default function AdminTutoresPage() {
     }, 900);
   }
 
+  const tutorTabs = useMemo(
+    () => [
+      { key: "ALL", label: "Todos", count: guardians.length },
+      {
+        key: "ACTIVE",
+        label: "Con hijos",
+        count: guardians.filter((g) => g.students.length > 0).length,
+      },
+      {
+        key: "SIN_HIJOS",
+        label: "Sin vincular",
+        count: guardians.filter((g) => g.students.length === 0).length,
+      },
+    ],
+    [guardians],
+  );
+
+  const visibleGuardians = useMemo(() => {
+    if (activeTab === "ACTIVE") {
+      return guardians.filter((g) => g.students.length > 0);
+    }
+    if (activeTab === "SIN_HIJOS") {
+      return guardians.filter((g) => g.students.length === 0);
+    }
+    return guardians;
+  }, [activeTab, guardians]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar tutor por nombre, DNI o email..."
-          className="w-full max-w-md rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
-        />
-
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="shrink-0 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Nuevo Tutor
-        </button>
-      </div>
+      <TableToolbar
+        tabs={tutorTabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar tutor por nombre, DNI o email..."
+        actions={[
+          {
+            label: "Nuevo Tutor",
+            primary: true,
+            onClick: openCreateModal,
+          },
+        ]}
+      />
 
       {feedback ? (
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
@@ -281,7 +310,7 @@ export default function AdminTutoresPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {loading ? (
+              {loading && !hasLoadedOnce ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -290,7 +319,7 @@ export default function AdminTutoresPage() {
                     Cargando tutores...
                   </td>
                 </tr>
-              ) : guardians.length === 0 ? (
+              ) : visibleGuardians.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -300,7 +329,7 @@ export default function AdminTutoresPage() {
                   </td>
                 </tr>
               ) : (
-                guardians.map((g) => (
+                visibleGuardians.map((g) => (
                   <tr
                     key={g.id}
                     onClick={() => router.push(`/admin/tutores/${g.id}`)}

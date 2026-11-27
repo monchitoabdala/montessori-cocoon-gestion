@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { FeeStatus, LeaveStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -6,8 +6,34 @@ import {
   isAdminOrStaff,
   isGuardian,
 } from "@/lib/auth";
+import { toNumber } from "@/lib/billing";
 import { sendAndLogFeeNotification } from "@/lib/notifications";
 import prisma from "@/lib/prisma";
+
+interface SummaryNotificationItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: "OVERDUE" | "LEAVE" | "FEE";
+  href: string;
+  date: string;
+}
+
+function formatArsShort(value: number): string {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+const LEAVE_TYPE_LABELS: Record<string, string> = {
+  VACATION: "Vacaciones",
+  SICK: "Licencia medica",
+  PERSONAL: "Dia personal",
+  MATERNITY: "Maternidad",
+  STUDY: "Licencia por estudio",
+};
 
 const createNotificationSchema = z.object({
   feeChargeId: z.string().min(1, "feeChargeId es requerido"),
@@ -19,11 +45,121 @@ export async function GET(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
+
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get("summary") === "true") {
+    if (isAdminOrStaff(session.role)) {
+      const [overdueCharges, overdueCount, pendingLeaves, pendingLeavesCount] =
+        await Promise.all([
+          prisma.feeCharge.findMany({
+            where: { status: FeeStatus.OVERDUE },
+            take: 5,
+            orderBy: { dueDate: "asc" },
+            include: {
+              student: { select: { firstName: true, lastName: true } },
+            },
+          }),
+          prisma.feeCharge.count({ where: { status: FeeStatus.OVERDUE } }),
+          prisma.employeeLeave.findMany({
+            where: { status: LeaveStatus.PENDING },
+            take: 5,
+            orderBy: { createdAt: "desc" },
+            include: {
+              employee: { select: { firstName: true, lastName: true } },
+            },
+          }),
+          prisma.employeeLeave.count({ where: { status: LeaveStatus.PENDING } }),
+        ]);
+
+      const items: SummaryNotificationItem[] = [
+        ...pendingLeaves.map((leave) => ({
+          id: `leave-${leave.id}`,
+          title: `Solicitud de ${LEAVE_TYPE_LABELS[leave.type] ?? leave.type}`,
+          subtitle: `${leave.employee.lastName}, ${leave.employee.firstName} · ${leave.daysCount} ${leave.daysCount === 1 ? "dia" : "dias"}`,
+          category: "LEAVE" as const,
+          href: "/admin/vacaciones",
+          date: leave.createdAt.toISOString(),
+        })),
+        ...overdueCharges.map((charge) => {
+          const balance = Math.max(
+            0,
+            toNumber(charge.finalAmount) - toNumber(charge.paidAmount)
+          );
+          return {
+            id: `overdue-${charge.id}`,
+            title: `Cuota vencida · ${charge.student.lastName}, ${charge.student.firstName}`,
+            subtitle: `${charge.description} · Saldo ${formatArsShort(balance)}`,
+            category: "OVERDUE" as const,
+            href: "/admin/cuotas",
+            date: charge.dueDate.toISOString(),
+          };
+        }),
+      ];
+
+      return NextResponse.json({
+        unreadCount: overdueCount + pendingLeavesCount,
+        items,
+      });
+    }
+
+    if (isGuardian(session.role)) {
+      if (!session.guardianId) {
+        return NextResponse.json({ unreadCount: 0, items: [] });
+      }
+
+      const [charges, totalCount] = await Promise.all([
+        prisma.feeCharge.findMany({
+          where: {
+            status: { in: [FeeStatus.OVERDUE, FeeStatus.PENDING] },
+            student: {
+              guardians: { some: { guardianId: session.guardianId } },
+            },
+          },
+          take: 8,
+          orderBy: { dueDate: "asc" },
+          include: {
+            student: { select: { firstName: true, lastName: true } },
+          },
+        }),
+        prisma.feeCharge.count({
+          where: {
+            status: { in: [FeeStatus.OVERDUE, FeeStatus.PENDING] },
+            student: {
+              guardians: { some: { guardianId: session.guardianId } },
+            },
+          },
+        }),
+      ]);
+
+      const items: SummaryNotificationItem[] = charges.map((charge) => {
+        const balance = Math.max(
+          0,
+          toNumber(charge.finalAmount) - toNumber(charge.paidAmount)
+        );
+        const isOverdue = charge.status === FeeStatus.OVERDUE;
+        return {
+          id: `fee-${charge.id}`,
+          title: `${isOverdue ? "Cuota vencida" : "Cuota pendiente"} · ${charge.student.firstName}`,
+          subtitle: `${charge.description} · ${formatArsShort(balance)}`,
+          category: isOverdue ? "OVERDUE" : "FEE",
+          href: "/portal",
+          date: charge.dueDate.toISOString(),
+        };
+      });
+
+      return NextResponse.json({
+        unreadCount: totalCount,
+        items,
+      });
+    }
+
+    return NextResponse.json({ unreadCount: 0, items: [] });
+  }
+
   if (!isAdminOrStaff(session.role) && !isGuardian(session.role)) {
     return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
-  const { searchParams } = new URL(request.url);
   const limitParam = Number(searchParams.get("limit") ?? 50);
   const take =
     Number.isFinite(limitParam) && limitParam > 0

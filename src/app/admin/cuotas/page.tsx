@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/school/Avatar";
 import { GroupedSelect, type GroupedSelectGroup } from "@/components/school/GroupedSelect";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -93,10 +94,11 @@ export default function AdminCuotasPage() {
 
   const [period, setPeriod] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [divisionId, setDivisionId] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -132,16 +134,14 @@ export default function AdminCuotasPage() {
   } | null>(null);
 
   useEffect(() => {
-    if (!openMenu && !statusMenuOpen) return;
+    if (!openMenu) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setOpenMenu(null);
-        setStatusMenuOpen(false);
       }
     }
     function handleClose() {
       setOpenMenu(null);
-      setStatusMenuOpen(false);
     }
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("click", handleClose);
@@ -151,7 +151,7 @@ export default function AdminCuotasPage() {
       window.removeEventListener("click", handleClose);
       window.removeEventListener("scroll", handleClose, true);
     };
-  }, [openMenu, statusMenuOpen]);
+  }, [openMenu]);
 
   const loadStructure = useCallback(async () => {
     const res = await fetch("/api/structure", { cache: "no-store" });
@@ -168,7 +168,6 @@ export default function AdminCuotasPage() {
     try {
       const params = new URLSearchParams();
       if (period) params.set("period", period);
-      if (statusFilter) params.set("status", statusFilter);
       if (divisionId) params.set("divisionId", divisionId);
 
       const res = await fetch(`/api/fees?${params.toString()}`, {
@@ -183,8 +182,9 @@ export default function AdminCuotasPage() {
       setError(err instanceof Error ? err.message : "Error al listar cuotas");
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
-  }, [divisionId, period, statusFilter]);
+  }, [divisionId, period]);
 
   useEffect(() => {
     void loadStructure();
@@ -371,146 +371,94 @@ export default function AdminCuotasPage() {
     return Array.from(map.values());
   }, [divisions]);
 
+  const feeTabs = useMemo(
+    () => [
+      { key: "", label: "Todas", count: fees.length },
+      {
+        key: "PENDING",
+        label: "Pendientes",
+        count: fees.filter((f) => f.status === "PENDING").length,
+      },
+      {
+        key: "OVERDUE",
+        label: "Vencidas",
+        count: fees.filter((f) => f.status === "OVERDUE").length,
+      },
+      {
+        key: "PARTIAL",
+        label: "Parciales",
+        count: fees.filter((f) => f.status === "PARTIAL").length,
+      },
+      {
+        key: "PAID",
+        label: "Pagadas",
+        count: fees.filter((f) => f.status === "PAID").length,
+      },
+    ],
+    [fees],
+  );
+
+  const visibleFees = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return fees.filter((f) => {
+      if (statusFilter && f.status !== statusFilter) return false;
+      if (q) {
+        const studentName =
+          `${f.student.lastName} ${f.student.firstName} ${f.student.legajo} ${f.description}`.toLowerCase();
+        if (!studentName.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [fees, search, statusFilter]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 lg:flex-row lg:items-end lg:justify-between dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
-              Período
-            </label>
-            <input
-              type="month"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-            />
+      <TableToolbar
+        tabs={feeTabs}
+        activeTab={statusFilter}
+        onTabChange={setStatusFilter}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar por alumno, legajo o concepto..."
+        activeFiltersCount={(period ? 1 : 0) + (divisionId ? 1 : 0)}
+        filtersContent={
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Período
+              </label>
+              <input
+                type="month"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                División
+              </label>
+              <GroupedSelect
+                value={divisionId}
+                onChange={setDivisionId}
+                groups={divisionGroups}
+                allLabel="Todas"
+              />
+            </div>
           </div>
-
-          <div className="relative">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
-              Estado
-            </label>
-            {(() => {
-              const FEE_STATUS_OPTIONS = [
-                { value: "", label: "Todos" },
-                { value: "PENDING", label: "Pendiente" },
-                { value: "OVERDUE", label: "Vencida" },
-                { value: "PARTIAL", label: "Parcial" },
-                { value: "PAID", label: "Pagada" },
-                { value: "CANCELLED", label: "Anulada" },
-              ];
-              const current =
-                FEE_STATUS_OPTIONS.find((o) => o.value === statusFilter) ??
-                FEE_STATUS_OPTIONS[0];
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setStatusMenuOpen((prev) => !prev);
-                    }}
-                    className="flex min-h-[38px] w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-                  >
-                    <span className="flex items-center">
-                      {current.value ? (
-                        <StatusBadge status={current.value} category="fee" />
-                      ) : (
-                        <span>{current.label}</span>
-                      )}
-                    </span>
-                    <svg
-                      className="size-4 text-gray-400"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  {statusMenuOpen ? (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-sm dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      {FEE_STATUS_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value || "ALL"}
-                          type="button"
-                          onClick={() => {
-                            setStatusFilter(opt.value);
-                            setStatusMenuOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                            statusFilter === opt.value
-                              ? "bg-gray-50 font-medium text-gray-900 dark:bg-gray-800/60 dark:text-white"
-                              : "text-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          <span>
-                            {opt.value ? (
-                              <StatusBadge status={opt.value} category="fee" />
-                            ) : (
-                              <span>{opt.label}</span>
-                            )}
-                          </span>
-                          {statusFilter === opt.value ? (
-                            <svg
-                              className="size-3.5 text-brand-600"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              );
-            })()}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
-              División
-            </label>
-            <GroupedSelect
-              value={divisionId}
-              onChange={setDivisionId}
-              groups={divisionGroups}
-              allLabel="Todas"
-            />
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={applyingLateFees}
-            onClick={() => void handleApplyLateFees()}
-            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {applyingLateFees ? "Aplicando..." : "Aplicar Mora"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowGenerateModal(true)}
-            className="shrink-0 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Generar Cuotas del Mes
-          </button>
-        </div>
-      </div>
+        }
+        actions={[
+          {
+            label: "Generar Cuotas del Mes",
+            primary: true,
+            onClick: () => setShowGenerateModal(true),
+          },
+          {
+            label: applyingLateFees ? "Aplicando mora..." : "Aplicar Mora",
+            onClick: () => void handleApplyLateFees(),
+          },
+        ]}
+      />
 
       {feedback ? (
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-200">
@@ -548,7 +496,7 @@ export default function AdminCuotasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-              {loading ? (
+              {loading && !hasLoadedOnce ? (
                 <tr>
                   <td
                     colSpan={9}
@@ -557,7 +505,7 @@ export default function AdminCuotasPage() {
                     Cargando cuotas...
                   </td>
                 </tr>
-              ) : fees.length === 0 ? (
+              ) : visibleFees.length === 0 ? (
                 <tr>
                   <td
                     colSpan={9}
@@ -567,7 +515,7 @@ export default function AdminCuotasPage() {
                   </td>
                 </tr>
               ) : (
-                fees.map((fee) => {
+                visibleFees.map((fee) => {
                   const balance = Math.max(
                     0,
                     Number(fee.finalAmount) - Number(fee.paidAmount),

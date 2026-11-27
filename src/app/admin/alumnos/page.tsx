@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/school/Avatar";
 import { GroupedSelect, type GroupedSelectGroup } from "@/components/school/GroupedSelect";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -112,6 +113,7 @@ export default function AdminAlumnosPage() {
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -198,7 +200,6 @@ export default function AdminAlumnosPage() {
       if (search.trim()) params.set("search", search.trim());
       if (levelId) params.set("levelId", levelId);
       if (divisionId) params.set("divisionId", divisionId);
-      if (statusFilter) params.set("status", statusFilter);
 
       const res = await fetch(`/api/students?${params.toString()}`, {
         cache: "no-store",
@@ -214,8 +215,9 @@ export default function AdminAlumnosPage() {
       );
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
-  }, [divisionId, levelId, search, statusFilter]);
+  }, [divisionId, levelId, search]);
 
   useEffect(() => {
     void loadMetadata();
@@ -364,153 +366,93 @@ export default function AdminAlumnosPage() {
     return Array.from(map.values());
   }, [filteredDivisions]);
 
+  const studentTabs = useMemo(
+    () => [
+      { key: "", label: "Todos", count: students.length },
+      {
+        key: "ACTIVE",
+        label: "Activos",
+        count: students.filter((s) => s.status === "ACTIVE").length,
+      },
+      {
+        key: "GRADUATED",
+        label: "Egresados",
+        count: students.filter((s) => s.status === "GRADUATED").length,
+      },
+      {
+        key: "INACTIVE",
+        label: "Inactivos",
+        count: students.filter((s) => s.status === "INACTIVE").length,
+      },
+    ],
+    [students],
+  );
+
+  const visibleStudents = useMemo(
+    () =>
+      statusFilter
+        ? students.filter((s) => s.status === statusFilter)
+        : students,
+    [statusFilter, students],
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, DNI o legajo..."
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-          />
-
-          <select
-            value={levelId}
-            onChange={(e) => {
-              setLevelId(e.target.value);
-              setDivisionId("");
-            }}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-          >
-            <option value="">Todos los niveles</option>
-            {levels.map((lvl) => (
-              <option key={lvl.id} value={lvl.id}>
-                {lvl.name}
-              </option>
-            ))}
-          </select>
-
-          <GroupedSelect
-            value={divisionId}
-            onChange={setDivisionId}
-            groups={divisionGroups}
-            allLabel="Todas las divisiones"
-          />
-
-          <div className="relative">
-            {(() => {
-              const STUDENT_STATUS_OPTIONS = [
-                { value: "", label: "Todos los estados" },
-                { value: "ACTIVE", label: "Activo" },
-                { value: "GRADUATED", label: "Egresado" },
-                { value: "INACTIVE", label: "Inactivo" },
-              ];
-              const current =
-                STUDENT_STATUS_OPTIONS.find((o) => o.value === statusFilter) ??
-                STUDENT_STATUS_OPTIONS[0];
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setStatusMenuOpen((prev) => !prev);
-                    }}
-                    className="flex min-h-[38px] w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-                  >
-                    <span className="flex items-center">
-                      {current.value ? (
-                        <StatusBadge
-                          status={current.value}
-                          category="student"
-                        />
-                      ) : (
-                        <span>{current.label}</span>
-                      )}
-                    </span>
-                    <svg
-                      className="size-4 text-gray-400"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  {statusMenuOpen ? (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-sm dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      {STUDENT_STATUS_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value || "ALL"}
-                          type="button"
-                          onClick={() => {
-                            setStatusFilter(opt.value);
-                            setStatusMenuOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                            statusFilter === opt.value
-                              ? "bg-gray-50 font-medium text-gray-900 dark:bg-gray-800/60 dark:text-white"
-                              : "text-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          <span>
-                            {opt.value ? (
-                              <StatusBadge
-                                status={opt.value}
-                                category="student"
-                              />
-                            ) : (
-                              <span>{opt.label}</span>
-                            )}
-                          </span>
-                          {statusFilter === opt.value ? (
-                            <svg
-                              className="size-3.5 text-brand-600"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              );
-            })()}
+      <TableToolbar
+        tabs={studentTabs}
+        activeTab={statusFilter}
+        onTabChange={setStatusFilter}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar por nombre, DNI o legajo..."
+        activeFiltersCount={(levelId ? 1 : 0) + (divisionId ? 1 : 0)}
+        filtersContent={
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Nivel
+              </label>
+              <select
+                value={levelId}
+                onChange={(e) => {
+                  setLevelId(e.target.value);
+                  setDivisionId("");
+                }}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
+              >
+                <option value="">Todos los niveles</option>
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                División
+              </label>
+              <GroupedSelect
+                value={divisionId}
+                onChange={setDivisionId}
+                groups={divisionGroups}
+                allLabel="Todas las divisiones"
+              />
+            </div>
           </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowGuardianModal(true)}
-            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            Nuevo Responsable
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowStudentModal(true)}
-            className="shrink-0 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Nuevo Alumno
-          </button>
-        </div>
-      </div>
+        }
+        actions={[
+          {
+            label: "Nuevo Alumno",
+            primary: true,
+            onClick: () => setShowStudentModal(true),
+          },
+          {
+            label: "Nuevo Responsable",
+            onClick: () => setShowGuardianModal(true),
+          },
+        ]}
+      />
 
       {feedback ? (
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-200">
@@ -546,7 +488,7 @@ export default function AdminAlumnosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-              {loading ? (
+              {loading && !hasLoadedOnce ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -555,7 +497,7 @@ export default function AdminAlumnosPage() {
                     Cargando alumnos...
                   </td>
                 </tr>
-              ) : students.length === 0 ? (
+              ) : visibleStudents.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -565,7 +507,7 @@ export default function AdminAlumnosPage() {
                   </td>
                 </tr>
               ) : (
-                students.map((st) => {
+                visibleStudents.map((st) => {
                   const mainGuardian =
                     st.guardians.find((g) => g.isFinancialResponsible)
                       ?.guardian ?? st.guardians[0]?.guardian;

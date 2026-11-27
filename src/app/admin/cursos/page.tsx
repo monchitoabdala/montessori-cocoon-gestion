@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -72,6 +73,7 @@ export default function AdminCursosPage() {
   const [teachers, setTeachers] = useState<EmployeeTeacher[]>([]);
 
   const [levelFilter, setLevelFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -150,16 +152,37 @@ export default function AdminCursosPage() {
     [grades],
   );
 
+  const levelTabs = useMemo(
+    () => [
+      { key: "", label: "Todos", count: divisions.length },
+      ...levels.map((lvl) => ({
+        key: lvl.id,
+        label: lvl.name,
+        count: divisions.filter((d) => d.grade.level.id === lvl.id).length,
+      })),
+    ],
+    [divisions, levels],
+  );
+
   const groupedLevels = useMemo(() => {
     const visibleLevels = levelFilter
       ? levels.filter((l) => l.id === levelFilter)
       : levels;
+    const q = search.trim().toLowerCase();
 
     return visibleLevels.map((lvl) => ({
       level: lvl,
-      divisions: divisions.filter((d) => d.grade.level.id === lvl.id),
+      divisions: divisions.filter((d) => {
+        if (d.grade.level.id !== lvl.id) return false;
+        if (q) {
+          const text =
+            `${d.grade.name} ${d.name} ${d.teacher ? `${d.teacher.lastName} ${d.teacher.firstName}` : ""}`.toLowerCase();
+          if (!text.includes(q)) return false;
+        }
+        return true;
+      }),
     }));
-  }, [divisions, levelFilter, levels]);
+  }, [divisions, levelFilter, levels, search]);
 
   async function handleCreateDivision(e: FormEvent) {
     e.preventDefault();
@@ -196,28 +219,21 @@ export default function AdminCursosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <select
-          value={levelFilter}
-          onChange={(e) => setLevelFilter(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none"
-        >
-          <option value="">Todos los niveles</option>
-          {levels.map((lvl) => (
-            <option key={lvl.id} value={lvl.id}>
-              {lvl.name}
-            </option>
-          ))}
-        </select>
-
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className="shrink-0 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Nuevo Curso / División
-        </button>
-      </div>
+      <TableToolbar
+        tabs={levelTabs}
+        activeTab={levelFilter}
+        onTabChange={setLevelFilter}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar curso, división o docente..."
+        actions={[
+          {
+            label: "Nuevo Curso / División",
+            primary: true,
+            onClick: () => setShowModal(true),
+          },
+        ]}
+      />
 
       {feedback ? (
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
