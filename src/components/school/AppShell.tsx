@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/school/Avatar";
 import type { UserRole } from "@/lib/auth";
 import { cn } from "@/utils";
 import Link from "next/link";
@@ -195,9 +196,18 @@ function IconZap() {
   );
 }
 
-function IconSettings() {
+function IconUser({ className = "size-4.5" }: { className?: string }) {
   return (
-    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function IconSettings({ className = "size-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
@@ -394,6 +404,13 @@ function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
       { label: "Datos del Colegio" },
     ];
   }
+  if (pathname.startsWith("/admin/configuracion/perfil")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Configuración", href: "/admin/configuracion" },
+      { label: "Mi Perfil" },
+    ];
+  }
   if (pathname.startsWith("/admin/configuracion/aranceles")) {
     return [
       { label: "Administración", href: "/admin" },
@@ -459,6 +476,7 @@ function getConfigNavGroup(): NavGroup {
   return {
     label: "Configuración del colegio",
     items: [
+      { label: "Mi Perfil", href: "/admin/configuracion/perfil", icon: <IconUser /> },
       { label: "Datos del Colegio", href: "/admin/configuracion", icon: <IconBuilding /> },
       { label: "Aranceles y Becas", href: "/admin/configuracion/aranceles", icon: <IconWallet /> },
       { label: "Ciclo Lectivo y Mora", href: "/admin/configuracion/ciclo-lectivo", icon: <IconCalendarDays /> },
@@ -570,10 +588,54 @@ export function AppShell({ user, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(user.name);
+  const [displayEmail, setDisplayEmail] = useState(user.email);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
   const [notifItems, setNotifItems] = useState<NotificationSummaryItem[]>([]);
   const [readIds, setReadIds] = useState<string[]>([]);
   const [clearedIds, setClearedIds] = useState<string[]>([]);
   const bellRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchMe = () => {
+      fetch("/api/auth/me")
+        .then((res) => (res.ok ? res.json() : null))
+        .then(
+          (
+            data: {
+              user?: {
+                name?: string;
+                email?: string;
+                photoUrl?: string | null;
+                employee?: { photoUrl?: string | null } | null;
+                guardian?: { photoUrl?: string | null } | null;
+              };
+            } | null,
+          ) => {
+            if (cancelled || !data?.user) return;
+            if (data.user.name) setDisplayName(data.user.name);
+            if (data.user.email) setDisplayEmail(data.user.email);
+            const resolvedPhoto =
+              data.user.photoUrl ??
+              data.user.employee?.photoUrl ??
+              data.user.guardian?.photoUrl ??
+              null;
+            setProfilePhotoUrl(resolvedPhoto);
+          },
+        )
+        .catch(() => {});
+    };
+
+    fetchMe();
+    window.addEventListener("cocoon-profile-updated", fetchMe);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("cocoon-profile-updated", fetchMe);
+    };
+  }, []);
 
   const loadLocalNotifState = () => {
     try {
@@ -642,15 +704,20 @@ export function AppShell({ user, children }: AppShellProps) {
   }, []);
 
   useEffect(() => {
-    if (!bellOpen) return;
+    if (!bellOpen && !profileOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (bellRef.current && !bellRef.current.contains(target)) {
         setBellOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(target)) {
+        setProfileOpen(false);
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setBellOpen(false);
+        setProfileOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -659,7 +726,7 @@ export function AppShell({ user, children }: AppShellProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [bellOpen]);
+  }, [bellOpen, profileOpen]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -933,7 +1000,10 @@ export function AppShell({ user, children }: AppShellProps) {
               <div ref={bellRef} className="relative">
                 <button
                   type="button"
-                  onClick={() => setBellOpen((prev) => !prev)}
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setBellOpen((prev) => !prev);
+                  }}
                   title="Notificaciones y vencimientos"
                   aria-label="Notificaciones y vencimientos"
                   aria-expanded={bellOpen}
@@ -1076,11 +1146,120 @@ export function AppShell({ user, children }: AppShellProps) {
                 ) : null}
               </div>
 
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-xs font-semibold text-gray-700"
-                title={`${user.name} (${roleMeta.badge})`}
-              >
-                {getInitials(user.name)}
+              <div ref={profileRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBellOpen(false);
+                    setProfileOpen((prev) => !prev);
+                  }}
+                  title={`${displayName} (${roleMeta.badge})`}
+                  aria-label="Menú de perfil"
+                  aria-expanded={profileOpen}
+                  className="flex items-center rounded-full transition-opacity hover:opacity-90 focus:outline-none"
+                >
+                  <Avatar
+                    src={profilePhotoUrl}
+                    name={displayName}
+                    size="sm"
+                    className="size-8 text-xs"
+                  />
+                </button>
+
+                {profileOpen ? (
+                  <div className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
+                    <div className="flex items-center gap-2.5 border-b border-gray-100 px-3.5 pt-1 pb-2.5">
+                      <Avatar
+                        src={profilePhotoUrl}
+                        name={displayName}
+                        size="md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold text-gray-900">
+                          {displayName}
+                        </p>
+                        <p className="truncate text-[11px] text-gray-500">
+                          {displayEmail}
+                        </p>
+                        <span className="mt-1 inline-block rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                          {roleMeta.badge}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="py-1">
+                      {user.role === "ADMIN" || user.role === "STAFF" ? (
+                        <>
+                          <Link
+                            href="/admin/configuracion/perfil"
+                            onClick={() => setProfileOpen(false)}
+                            className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <IconUser className="size-4 text-gray-400" />
+                            <span>Mi Perfil</span>
+                          </Link>
+                          <Link
+                            href="/admin/configuracion"
+                            onClick={() => setProfileOpen(false)}
+                            className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <IconSettings className="size-4 text-gray-400" />
+                            <span>Configuración del Colegio</span>
+                          </Link>
+                          <Link
+                            href="/admin/notificaciones"
+                            onClick={() => setProfileOpen(false)}
+                            className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <span className="text-gray-400">
+                              <IconBell />
+                            </span>
+                            <span>Notificaciones</span>
+                          </Link>
+                        </>
+                      ) : user.role === "TEACHER" ? (
+                        <Link
+                          href="/docente"
+                          onClick={() => setProfileOpen(false)}
+                          className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          <span className="text-gray-400">
+                            <IconBookOpen />
+                          </span>
+                          <span>Mis Cursos</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          href="/portal"
+                          onClick={() => setProfileOpen(false)}
+                          className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          <span className="text-gray-400">
+                            <IconWallet />
+                          </span>
+                          <span>Estado de Cuenta</span>
+                        </Link>
+                      )}
+                    </div>
+
+                    <div className="my-1 border-t border-gray-100" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        handleLogout();
+                      }}
+                      disabled={loggingOut}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50/60 disabled:opacity-60"
+                    >
+                      <IconLogout />
+                      <span>
+                        {loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
+                      </span>
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <button

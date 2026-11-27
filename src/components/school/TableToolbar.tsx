@@ -236,7 +236,7 @@ export function TableToolbar({
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              className="h-9 w-full rounded-lg border border-gray-200 bg-white pr-3 pl-9 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-gray-200 bg-white pr-3 pl-9 text-sm text-gray-800 transition-colors placeholder:text-gray-400 focus:border-gray-300 focus:ring-0 focus:outline-none"
             />
           </div>
         ) : null}

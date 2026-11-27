@@ -125,6 +125,15 @@
   body {
     @apply relative z-1 bg-gray-50 font-outfit font-normal;
   }
+
+  input:not([type='checkbox']):not([type='radio']):focus,
+  textarea:focus,
+  select:focus {
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    box-shadow: 0 0 0 2px rgba(16, 24, 40, 0.04) !important;
+    border-color: #d0d5dd !important;
+  }
 }
 
 @utility menu-item {
