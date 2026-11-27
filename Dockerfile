@@ -3,7 +3,8 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl libc6-compat
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json prisma.config.ts ./
+COPY prisma ./prisma
 RUN npm ci
 
 COPY . .
