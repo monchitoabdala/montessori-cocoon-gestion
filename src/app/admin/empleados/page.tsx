@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TablePagination } from "@/components/school/TablePagination";
 import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,6 +48,7 @@ export default function AdminEmpleadosPage() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
   const [activeTab, setActiveTab] = useState("ALL");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +201,15 @@ export default function AdminEmpleadosPage() {
     return employees;
   }, [activeTab, employees]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, department, activeTab]);
+
+  const paginatedEmployees = useMemo(
+    () => visibleEmployees.slice((page - 1) * 20, page * 20),
+    [page, visibleEmployees],
+  );
+
   return (
     <div className="space-y-6">
       <TableToolbar
@@ -231,6 +242,12 @@ export default function AdminEmpleadosPage() {
         actions={[
           {
             label: "Nuevo Empleado",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+              </svg>
+            ),
             primary: true,
             onClick: () => setShowModal(true),
           },
@@ -291,7 +308,7 @@ export default function AdminEmpleadosPage() {
                   </td>
                 </tr>
               ) : (
-                visibleEmployees.map((emp) => (
+                paginatedEmployees.map((emp) => (
                   <tr
                     key={emp.id}
                     onClick={() => router.push(`/admin/empleados/${emp.id}`)}
@@ -386,6 +403,12 @@ export default function AdminEmpleadosPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={20}
+          totalItems={visibleEmployees.length}
+          onPageChange={setPage}
+        />
       </section>
 
       {openMenu ? (

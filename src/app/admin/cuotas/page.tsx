@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/school/Avatar";
 import { GroupedSelect, type GroupedSelectGroup } from "@/components/school/GroupedSelect";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TablePagination } from "@/components/school/TablePagination";
 import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -96,6 +97,7 @@ export default function AdminCuotasPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [divisionId, setDivisionId] = useState("");
+  const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -411,6 +413,15 @@ export default function AdminCuotasPage() {
     });
   }, [fees, search, statusFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, period, divisionId, statusFilter]);
+
+  const paginatedFees = useMemo(
+    () => visibleFees.slice((page - 1) * 20, page * 20),
+    [page, visibleFees],
+  );
+
   return (
     <div className="space-y-6">
       <TableToolbar
@@ -450,11 +461,24 @@ export default function AdminCuotasPage() {
         actions={[
           {
             label: "Generar Cuotas del Mes",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+                <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+                <path d="M12 17.5v-11" />
+              </svg>
+            ),
             primary: true,
             onClick: () => setShowGenerateModal(true),
           },
           {
             label: applyingLateFees ? "Aplicando mora..." : "Aplicar Mora",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            ),
             onClick: () => void handleApplyLateFees(),
           },
         ]}
@@ -515,7 +539,7 @@ export default function AdminCuotasPage() {
                   </td>
                 </tr>
               ) : (
-                visibleFees.map((fee) => {
+                paginatedFees.map((fee) => {
                   const balance = Math.max(
                     0,
                     Number(fee.finalAmount) - Number(fee.paidAmount),
@@ -643,6 +667,12 @@ export default function AdminCuotasPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={20}
+          totalItems={visibleFees.length}
+          onPageChange={setPage}
+        />
       </section>
 
       {showGenerateModal ? (

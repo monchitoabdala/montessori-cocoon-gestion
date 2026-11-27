@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TablePagination } from "@/components/school/TablePagination";
 import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -52,6 +53,7 @@ export default function AdminTutoresPage() {
   const [allStudents, setAllStudents] = useState<StudentOption[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("ALL");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -259,6 +261,15 @@ export default function AdminTutoresPage() {
     return guardians;
   }, [activeTab, guardians]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeTab]);
+
+  const paginatedGuardians = useMemo(
+    () => visibleGuardians.slice((page - 1) * 20, page * 20),
+    [page, visibleGuardians],
+  );
+
   return (
     <div className="space-y-6">
       <TableToolbar
@@ -271,6 +282,14 @@ export default function AdminTutoresPage() {
         actions={[
           {
             label: "Nuevo Tutor",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" x2="19" y1="8" y2="14" />
+                <line x1="22" x2="16" y1="11" y2="11" />
+              </svg>
+            ),
             primary: true,
             onClick: openCreateModal,
           },
@@ -329,7 +348,7 @@ export default function AdminTutoresPage() {
                   </td>
                 </tr>
               ) : (
-                visibleGuardians.map((g) => (
+                paginatedGuardians.map((g) => (
                   <tr
                     key={g.id}
                     onClick={() => router.push(`/admin/tutores/${g.id}`)}
@@ -446,6 +465,12 @@ export default function AdminTutoresPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={20}
+          totalItems={visibleGuardians.length}
+          onPageChange={setPage}
+        />
       </section>
 
       {openMenu ? (

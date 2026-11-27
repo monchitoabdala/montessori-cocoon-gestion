@@ -48,30 +48,42 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   if (searchParams.get("summary") === "true") {
-    if (isAdminOrStaff(session.role)) {
-      const [overdueCharges, overdueCount, pendingLeaves, pendingLeavesCount] =
-        await Promise.all([
-          prisma.feeCharge.findMany({
-            where: { status: FeeStatus.OVERDUE },
-            take: 5,
-            orderBy: { dueDate: "asc" },
-            include: {
-              student: { select: { firstName: true, lastName: true } },
-            },
-          }),
-          prisma.feeCharge.count({ where: { status: FeeStatus.OVERDUE } }),
-          prisma.employeeLeave.findMany({
-            where: { status: LeaveStatus.PENDING },
-            take: 5,
-            orderBy: { createdAt: "desc" },
-            include: {
-              employee: { select: { firstName: true, lastName: true } },
-            },
-          }),
-          prisma.employeeLeave.count({ where: { status: LeaveStatus.PENDING } }),
-        ]);
+    const rawLimit = Number(searchParams.get("limit") ?? 20);
+    const limit =
+      Number.isFinite(rawLimit) && rawLimit > 0
+        ? Math.min(Math.floor(rawLimit), 100)
+        : 20;
+    const rawOffset = Number(searchParams.get("offset") ?? 0);
+    const offset =
+      Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.floor(rawOffset) : 0;
 
-      const items: SummaryNotificationItem[] = [
+    if (isAdminOrStaff(session.role)) {
+      const [overdueCharges, pendingLeaves, recentLogs] = await Promise.all([
+        prisma.feeCharge.findMany({
+          where: { status: FeeStatus.OVERDUE },
+          orderBy: { dueDate: "asc" },
+          include: {
+            student: { select: { firstName: true, lastName: true } },
+          },
+        }),
+        prisma.employeeLeave.findMany({
+          where: { status: LeaveStatus.PENDING },
+          orderBy: { createdAt: "desc" },
+          include: {
+            employee: { select: { firstName: true, lastName: true } },
+          },
+        }),
+        prisma.notificationLog.findMany({
+          take: 50,
+          orderBy: { createdAt: "desc" },
+          include: {
+            student: { select: { firstName: true, lastName: true } },
+            guardian: { select: { firstName: true, lastName: true } },
+          },
+        }),
+      ]);
+
+      const allItems: SummaryNotificationItem[] = [
         ...pendingLeaves.map((leave) => ({
           id: `leave-${leave.id}`,
           title: `Solicitud de ${LEAVE_TYPE_LABELS[leave.type] ?? leave.type}`,
@@ -94,17 +106,44 @@ export async function GET(request: NextRequest) {
             date: charge.dueDate.toISOString(),
           };
         }),
-      ];
+        ...recentLogs.map((log) => {
+          const person = log.student
+            ? `${log.student.lastName}, ${log.student.firstName}`
+            : log.guardian
+              ? `${log.guardian.lastName}, ${log.guardian.firstName}`
+              : log.recipient;
+          return {
+            id: `log-${log.id}`,
+            title: log.subject || `Aviso ${log.channel}`,
+            subtitle: `${person} · ${log.channel} (${log.status})`,
+            category: "FEE" as const,
+            href: "/admin/cuotas",
+            date: log.createdAt.toISOString(),
+          };
+        }),
+      ].sort((a, b) => b.date.localeCompare(a.date));
+
+      const totalCount = allItems.length;
+      const unreadCount = overdueCharges.length + pendingLeaves.length;
+      const items = allItems.slice(offset, offset + limit);
+      const hasMore = offset + items.length < totalCount;
 
       return NextResponse.json({
-        unreadCount: overdueCount + pendingLeavesCount,
+        unreadCount,
+        totalCount,
+        hasMore,
         items,
       });
     }
 
     if (isGuardian(session.role)) {
       if (!session.guardianId) {
-        return NextResponse.json({ unreadCount: 0, items: [] });
+        return NextResponse.json({
+          unreadCount: 0,
+          totalCount: 0,
+          hasMore: false,
+          items: [],
+        });
       }
 
       const [charges, totalCount] = await Promise.all([
@@ -115,7 +154,8 @@ export async function GET(request: NextRequest) {
               guardians: { some: { guardianId: session.guardianId } },
             },
           },
-          take: 8,
+          skip: offset,
+          take: limit,
           orderBy: { dueDate: "asc" },
           include: {
             student: { select: { firstName: true, lastName: true } },
@@ -147,13 +187,22 @@ export async function GET(request: NextRequest) {
         };
       });
 
+      const hasMore = offset + items.length < totalCount;
+
       return NextResponse.json({
         unreadCount: totalCount,
+        totalCount,
+        hasMore,
         items,
       });
     }
 
-    return NextResponse.json({ unreadCount: 0, items: [] });
+    return NextResponse.json({
+      unreadCount: 0,
+      totalCount: 0,
+      hasMore: false,
+      items: [],
+    });
   }
 
   if (!isAdminOrStaff(session.role) && !isGuardian(session.role)) {

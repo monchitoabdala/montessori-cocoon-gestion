@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/school/Avatar";
 import { GroupedSelect, type GroupedSelectGroup } from "@/components/school/GroupedSelect";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TablePagination } from "@/components/school/TablePagination";
 import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -110,7 +111,7 @@ export default function AdminAlumnosPage() {
   const [levelId, setLevelId] = useState("");
   const [divisionId, setDivisionId] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -127,16 +128,14 @@ export default function AdminAlumnosPage() {
   } | null>(null);
 
   useEffect(() => {
-    if (!openMenu && !statusMenuOpen) return;
+    if (!openMenu) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setOpenMenu(null);
-        setStatusMenuOpen(false);
       }
     }
     function handleClose() {
       setOpenMenu(null);
-      setStatusMenuOpen(false);
     }
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("click", handleClose);
@@ -146,7 +145,7 @@ export default function AdminAlumnosPage() {
       window.removeEventListener("click", handleClose);
       window.removeEventListener("scroll", handleClose, true);
     };
-  }, [openMenu, statusMenuOpen]);
+  }, [openMenu]);
 
   // New student form
   const [stFirstName, setStFirstName] = useState("");
@@ -396,6 +395,15 @@ export default function AdminAlumnosPage() {
     [statusFilter, students],
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, levelId, divisionId, statusFilter]);
+
+  const paginatedStudents = useMemo(
+    () => visibleStudents.slice((page - 1) * 20, page * 20),
+    [page, visibleStudents],
+  );
+
   return (
     <div className="space-y-6">
       <TableToolbar
@@ -444,11 +452,27 @@ export default function AdminAlumnosPage() {
         actions={[
           {
             label: "Nuevo Alumno",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" x2="19" y1="8" y2="14" />
+                <line x1="22" x2="16" y1="11" y2="11" />
+              </svg>
+            ),
             primary: true,
             onClick: () => setShowStudentModal(true),
           },
           {
             label: "Nuevo Responsable",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            ),
             onClick: () => setShowGuardianModal(true),
           },
         ]}
@@ -507,7 +531,7 @@ export default function AdminAlumnosPage() {
                   </td>
                 </tr>
               ) : (
-                visibleStudents.map((st) => {
+                paginatedStudents.map((st) => {
                   const mainGuardian =
                     st.guardians.find((g) => g.isFinancialResponsible)
                       ?.guardian ?? st.guardians[0]?.guardian;
@@ -634,6 +658,12 @@ export default function AdminAlumnosPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={20}
+          totalItems={visibleStudents.length}
+          onPageChange={setPage}
+        />
       </section>
 
       {showStudentModal ? (

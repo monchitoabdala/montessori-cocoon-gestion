@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/school/Avatar";
 import { StatusBadge } from "@/components/school/StatusBadge";
+import { TablePagination } from "@/components/school/TablePagination";
 import { TableToolbar } from "@/components/school/TableToolbar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -74,6 +75,7 @@ export default function AdminCursosPage() {
 
   const [levelFilter, setLevelFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -164,25 +166,36 @@ export default function AdminCursosPage() {
     [divisions, levels],
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [levelFilter, search]);
+
+  const filteredDivisions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return divisions.filter((d) => {
+      if (levelFilter && d.grade.level.id !== levelFilter) return false;
+      if (q) {
+        const text =
+          `${d.grade.name} ${d.name} ${d.teacher ? `${d.teacher.lastName} ${d.teacher.firstName}` : ""}`.toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [divisions, levelFilter, search]);
+
   const groupedLevels = useMemo(() => {
+    const pageDivisions = filteredDivisions.slice((page - 1) * 20, page * 20);
     const visibleLevels = levelFilter
       ? levels.filter((l) => l.id === levelFilter)
       : levels;
-    const q = search.trim().toLowerCase();
 
-    return visibleLevels.map((lvl) => ({
-      level: lvl,
-      divisions: divisions.filter((d) => {
-        if (d.grade.level.id !== lvl.id) return false;
-        if (q) {
-          const text =
-            `${d.grade.name} ${d.name} ${d.teacher ? `${d.teacher.lastName} ${d.teacher.firstName}` : ""}`.toLowerCase();
-          if (!text.includes(q)) return false;
-        }
-        return true;
-      }),
-    }));
-  }, [divisions, levelFilter, levels, search]);
+    return visibleLevels
+      .map((lvl) => ({
+        level: lvl,
+        divisions: pageDivisions.filter((d) => d.grade.level.id === lvl.id),
+      }))
+      .filter((g) => g.divisions.length > 0 || visibleLevels.length === 1);
+  }, [filteredDivisions, levelFilter, levels, page]);
 
   async function handleCreateDivision(e: FormEvent) {
     e.preventDefault();
@@ -229,6 +242,12 @@ export default function AdminCursosPage() {
         actions={[
           {
             label: "Nuevo Curso / División",
+            icon: (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 7v14" />
+                <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
+              </svg>
+            ),
             primary: true,
             onClick: () => setShowModal(true),
           },
@@ -421,6 +440,15 @@ export default function AdminCursosPage() {
               </div>
             </section>
           ))}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <TablePagination
+              page={page}
+              pageSize={20}
+              totalItems={filteredDivisions.length}
+              onPageChange={setPage}
+              className="border-t-0"
+            />
+          </div>
         </div>
       )}
 

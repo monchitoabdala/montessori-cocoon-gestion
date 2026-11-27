@@ -381,6 +381,12 @@ function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
       { label: "Vacaciones" },
     ];
   }
+  if (pathname.startsWith("/admin/notificaciones")) {
+    return [
+      { label: "Administración", href: "/admin" },
+      { label: "Notificaciones" },
+    ];
+  }
   if (pathname === "/admin/configuracion") {
     return [
       { label: "Administración", href: "/admin" },
@@ -564,17 +570,68 @@ export function AppShell({ user, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [notifItems, setNotifItems] = useState<NotificationSummaryItem[]>([]);
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [clearedIds, setClearedIds] = useState<string[]>([]);
   const bellRef = useRef<HTMLDivElement>(null);
+
+  const loadLocalNotifState = () => {
+    try {
+      const raw = localStorage.getItem("cocoon_notif_state");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        readIds?: unknown;
+        clearedIds?: unknown;
+      };
+      setReadIds(
+        Array.isArray(parsed.readIds)
+          ? parsed.readIds.filter((x): x is string => typeof x === "string")
+          : [],
+      );
+      setClearedIds(
+        Array.isArray(parsed.clearedIds)
+          ? parsed.clearedIds.filter((x): x is string => typeof x === "string")
+          : [],
+      );
+    } catch {
+      // ignore invalid storage
+    }
+  };
+
+  const persistLocalNotifState = (
+    nextReadIds: string[],
+    nextClearedIds: string[],
+  ) => {
+    setReadIds(nextReadIds);
+    setClearedIds(nextClearedIds);
+    try {
+      localStorage.setItem(
+        "cocoon_notif_state",
+        JSON.stringify({ readIds: nextReadIds, clearedIds: nextClearedIds }),
+      );
+      window.dispatchEvent(new Event("cocoon-notif-updated"));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  useEffect(() => {
+    loadLocalNotifState();
+    const handleSync = () => loadLocalNotifState();
+    window.addEventListener("storage", handleSync);
+    window.addEventListener("cocoon-notif-updated", handleSync);
+    return () => {
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener("cocoon-notif-updated", handleSync);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/notifications?summary=true")
+    fetch("/api/notifications?summary=true&limit=50&offset=0")
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { unreadCount?: number; items?: NotificationSummaryItem[] } | null) => {
+      .then((data: { items?: NotificationSummaryItem[] } | null) => {
         if (!cancelled && data) {
-          setUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
           setNotifItems(Array.isArray(data.items) ? data.items : []);
         }
       })
@@ -629,7 +686,44 @@ export function AppShell({ user, children }: AppShellProps) {
       ? "/portal"
       : user.role === "TEACHER"
         ? "/docente/asistencia"
-        : "/admin/cuotas";
+        : "/admin/notificaciones";
+
+  const visibleNotifItems = notifItems.filter(
+    (item) => !clearedIds.includes(item.id),
+  );
+  const unreadCount = visibleNotifItems.filter(
+    (item) => !readIds.includes(item.id),
+  ).length;
+
+  const markItemRead = (id: string) => {
+    if (readIds.includes(id)) return;
+    persistLocalNotifState([...readIds, id], clearedIds);
+  };
+
+  const toggleItemRead = (id: string) => {
+    if (readIds.includes(id)) {
+      persistLocalNotifState(
+        readIds.filter((x) => x !== id),
+        clearedIds,
+      );
+    } else {
+      persistLocalNotifState([...readIds, id], clearedIds);
+    }
+  };
+
+  const markAllRead = () => {
+    const merged = Array.from(
+      new Set([...readIds, ...visibleNotifItems.map((i) => i.id)]),
+    );
+    persistLocalNotifState(merged, clearedIds);
+  };
+
+  const clearAllVisible = () => {
+    const mergedCleared = Array.from(
+      new Set([...clearedIds, ...visibleNotifItems.map((i) => i.id)]),
+    );
+    persistLocalNotifState(readIds, mergedCleared);
+  };
 
   const isActive = (href: string) => {
     if (
@@ -855,24 +949,48 @@ export function AppShell({ user, children }: AppShellProps) {
 
                 {bellOpen ? (
                   <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-gray-200 bg-white shadow-lg">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
-                      <span className="text-xs font-semibold text-gray-900">
-                        Notificaciones
-                      </span>
-                      {unreadCount > 0 ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                          {unreadCount} pendientes
+                    <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3.5 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-gray-900">
+                          Notificaciones
                         </span>
+                        {unreadCount > 0 ? (
+                          <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            {unreadCount}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {visibleNotifItems.length > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={markAllRead}
+                            disabled={unreadCount === 0}
+                            className="text-[11px] font-medium text-blue-600 transition-colors hover:text-blue-700 disabled:text-gray-300"
+                          >
+                            Marcar leídas
+                          </button>
+                          <span className="text-gray-200">|</span>
+                          <button
+                            type="button"
+                            onClick={clearAllVisible}
+                            className="text-[11px] font-medium text-gray-500 transition-colors hover:text-gray-800"
+                          >
+                            Limpiar
+                          </button>
+                        </div>
                       ) : null}
                     </div>
 
                     <div className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
-                      {notifItems.length === 0 ? (
+                      {visibleNotifItems.length === 0 ? (
                         <div className="px-4 py-6 text-center text-xs text-gray-500">
                           Sin notificaciones pendientes
                         </div>
                       ) : (
-                        notifItems.map((item) => {
+                        visibleNotifItems.map((item) => {
+                          const isRead = readIds.includes(item.id);
                           const dotClass =
                             item.category === "OVERDUE"
                               ? "bg-red-500"
@@ -880,27 +998,66 @@ export function AppShell({ user, children }: AppShellProps) {
                                 ? "bg-amber-500"
                                 : "bg-blue-500";
                           return (
-                            <Link
+                            <div
                               key={item.id}
-                              href={item.href}
-                              onClick={() => setBellOpen(false)}
-                              className="flex items-start gap-2.5 px-4 py-2.5 transition-colors hover:bg-gray-50"
+                              className={cn(
+                                "flex items-start justify-between gap-2 px-3.5 py-2.5 transition-colors hover:bg-gray-50",
+                                isRead && "opacity-60",
+                              )}
                             >
-                              <span
-                                className={cn(
-                                  "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                                  dotClass,
-                                )}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-xs font-medium text-gray-900">
-                                  {item.title}
-                                </p>
-                                <p className="truncate text-[11px] text-gray-500">
-                                  {item.subtitle}
-                                </p>
-                              </div>
-                            </Link>
+                              <Link
+                                href={item.href}
+                                onClick={() => {
+                                  markItemRead(item.id);
+                                  setBellOpen(false);
+                                }}
+                                className="flex min-w-0 flex-1 items-start gap-2.5"
+                              >
+                                <span
+                                  className={cn(
+                                    "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                                    dotClass,
+                                  )}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-medium text-gray-900">
+                                    {item.title}
+                                  </p>
+                                  <p className="truncate text-[11px] text-gray-500">
+                                    {item.subtitle}
+                                  </p>
+                                </div>
+                              </Link>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleItemRead(item.id);
+                                }}
+                                title={
+                                  isRead
+                                    ? "Marcar como no leída"
+                                    : "Marcar como leída"
+                                }
+                                aria-label={
+                                  isRead
+                                    ? "Marcar como no leída"
+                                    : "Marcar como leída"
+                                }
+                                className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                              >
+                                <span
+                                  className={cn(
+                                    "size-2 rounded-full border",
+                                    isRead
+                                      ? "border-gray-300 bg-transparent"
+                                      : "border-blue-600 bg-blue-600",
+                                  )}
+                                />
+                              </button>
+                            </div>
                           );
                         })
                       )}
@@ -912,11 +1069,7 @@ export function AppShell({ user, children }: AppShellProps) {
                         onClick={() => setBellOpen(false)}
                         className="block text-center text-xs font-medium text-blue-600 hover:text-blue-700"
                       >
-                        {user.role === "GUARDIAN"
-                          ? "Ver estado de cuenta"
-                          : user.role === "TEACHER"
-                            ? "Ir a asistencia"
-                            : "Ver cuotas y vencimientos"}
+                        Ver todas las notificaciones
                       </Link>
                     </div>
                   </div>

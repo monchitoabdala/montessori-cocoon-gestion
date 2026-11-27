@@ -194,12 +194,12 @@ export function TableToolbar({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-4 pt-2 pb-2 lg:flex-row lg:items-center lg:justify-between",
+        "flex flex-col gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 lg:flex-row lg:items-center lg:justify-between lg:py-0",
         className,
       )}
     >
       {/* Left: Horizontal status/category tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => {
           const isActive = tab.key === activeTab;
           return (
@@ -208,7 +208,7 @@ export function TableToolbar({
               type="button"
               onClick={() => onTabChange?.(tab.key)}
               className={cn(
-                "-mb-2 flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-1.5 pb-3 text-xs font-medium whitespace-nowrap transition-colors",
+                "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-3 text-xs font-medium whitespace-nowrap transition-colors",
                 isActive
                   ? "border-blue-600 text-gray-900"
                   : "border-transparent text-gray-500 hover:text-gray-800",
@@ -224,7 +224,7 @@ export function TableToolbar({
       </div>
 
       {/* Right: Search + Filters + Actions */}
-      <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+      <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:py-2">
         {onSearchChange ? (
           <div className="relative w-full sm:w-80">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
